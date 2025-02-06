@@ -42,8 +42,15 @@ with open("insert_products.sql", "w", encoding="utf-8") as f:
     values = []
     for product in products:
         product_id, name, price = product
-        stock = random.randint(0, 100)  # Random stock (0-100)
-        
+
+        # Stock Logic Based on Product's Price
+        if price > 200:
+            stock = 20  # Expensive items, low stock
+        elif 50 <= price <= 199:
+            stock = 35  # Mid-range items, medium stock
+        else:
+            stock = 40  # Cheap items, high stock
+
         # Append SQL value row
         values.append(f"({product_id}, '{name}', {price}, {stock}, NULL)")
 
