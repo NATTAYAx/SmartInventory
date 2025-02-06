@@ -1,4 +1,6 @@
 #This code is for random the value of stock and avg_sales_per_day for the project.
+
+import random
 products = [
     (8852023672021, 'Koh-Kae Coated Broad Beans - Shrimp Flavour', 10),
     (8850291111006, 'Tong Garden Brand Flavour Broad Beans - Crab Curry', 10),
@@ -32,3 +34,20 @@ products = [
     (8850250002345, 'Ajinomoto Lite Sugar Low Calorie (80g)', 20),
     (5000167329421, 'Soap&Glory Magnifi-coco - Nourishing Body Lotion (550ml)',323),
 ]
+
+#Open SQL file to write data.
+with open("insert_products.sql", "w", encoding="utf-8") as f:
+    f.write("INSERT INTO products (id, name, price, stock, avg_sales_per_day) VALUES\n")
+
+    values = []
+    for product in products:
+        product_id, name, price = product
+        stock = random.randint(0, 100)  # Random stock (0-100)
+        
+        # Append SQL value row
+        values.append(f"({product_id}, '{name}', {price}, {stock}, NULL")
+
+    # Write values to file
+    f.write(",\n".join(values) + ";\n")
+
+print("'insert_products.sql' generated complete")
