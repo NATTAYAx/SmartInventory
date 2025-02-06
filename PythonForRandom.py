@@ -45,7 +45,7 @@ with open("insert_products.sql", "w", encoding="utf-8") as f:
         stock = random.randint(0, 100)  # Random stock (0-100)
         
         # Append SQL value row
-        values.append(f"({product_id}, '{name}', {price}, {stock}, NULL")
+        values.append(f"({product_id}, '{name}', {price}, {stock}, NULL)")
 
     # Write values to file
     f.write(",\n".join(values) + ";\n")
