@@ -204,7 +204,7 @@ def get_stock(category, name):
     return random.choice(bulk_sizes.get(category, [24, 48]))  # Default for non-perishable
 
 # Open SQL file to write data.
-with open("insert_products.sql", "w", encoding="utf-8") as f:
+with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f:
     f.write("INSERT INTO products (id, name, price, stock, avg_sales_per_day, category, brand_name) VALUES\n")
 
     values = []
@@ -222,4 +222,4 @@ with open("insert_products.sql", "w", encoding="utf-8") as f:
     # Write values to file
     f.write(",\n".join(values) + ";\n")
 
-print("'insert_products.sql' generated complete")
+print("'FirstVersionOfProductsDB.sql' generated complete")
