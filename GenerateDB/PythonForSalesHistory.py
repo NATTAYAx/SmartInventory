@@ -66,12 +66,12 @@ for day in range(31):  # Include Feb 8 and Feb 9
         daily_sales_target = max(daily_sales_target, 900)
 
     # **📌 Handling Bad Weather Days (Lower Sales, But Not Dead)**
-    if day in bad_weather_days and sale_date.strftime('%Y-%m-%d') not in ['2025-02-08', '2025-02-09']:
+    if day in bad_weather_days:
         daily_sales_target = int(daily_sales_target * random.uniform(0.6, 0.8))
         daily_sales_target = max(daily_sales_target, 250)
 
     # **📌 Adding Some Random Slow Days (~3 Total)**
-    if day in low_sales_days and sale_date.strftime('%Y-%m-%d') not in ['2025-02-08', '2025-02-09']:
+    if day in low_sales_days:
         daily_sales_target = int(daily_sales_target * random.uniform(0.7, 0.9))
         daily_sales_target = max(daily_sales_target, 200)
 
@@ -122,26 +122,28 @@ for day in range(31):  # Include Feb 8 and Feb 9
                 sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
                 total_sales += 1
 
-# **📌 FINAL ENFORCEMENT: EXACTLY 900 Sales for Feb 8 & Feb 9**
-for fix_date in ['2025-02-08', '2025-02-09']:
-    current_sales = sum(1 for sale in sales_data if sale[3].startswith(fix_date))
-    
-    if current_sales < 900:
-        missing_sales = 900 - current_sales
-        print(f"⚠️ Adding {missing_sales} missing sales for {fix_date}")
-        
-        for _ in range(missing_sales):
-            product = random.choice(products)
-            product_id, price = product
-            quantity_sold = random.randint(1, 5)
-            total_price = quantity_sold * float(price)
+# **📌 FINAL ENFORCEMENT FOR FEB 9 (ENSURE IT STAYS 900+)**
+final_sales_count = sum(1 for sale in sales_data if sale[3].startswith('2025-02-09'))
+random_target_for_feb9 = random.randint(900, 2000)  # Set the target range
 
-            random_hour = random.randint(6, 22)  # Favor peak hours
-            random_minute = random.randint(0, 59)
-            random_second = random.randint(0, 59)
-            final_sale_date = datetime.strptime(fix_date, "%Y-%m-%d") + timedelta(hours=random_hour, minutes=random_minute, seconds=random_second)
+if final_sales_count < random_target_for_feb9:
+    missing_sales = random_target_for_feb9 - final_sales_count
+    print(f"⚠️ Enforcing extra {missing_sales} sales for Feb 9 (Target: {random_target_for_feb9})")
 
-            sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
+    for _ in range(missing_sales):
+        product = random.choice(products)
+        product_id, price = product
+        quantity_sold = random.randint(1, 5)
+        total_price = quantity_sold * float(price)
+
+        random_hour = random.randint(6, 22)  # Favor peak hours
+        random_minute = random.randint(0, 59)
+        random_second = random.randint(0, 59)
+        final_sale_date = datetime.strptime('2025-02-09', "%Y-%m-%d") + timedelta(
+            hours=random_hour, minutes=random_minute, seconds=random_second
+        )
+
+        sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
 
 # **📌 Batch insert for better performance**
 cursor.executemany("""
