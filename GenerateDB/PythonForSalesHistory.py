@@ -22,44 +22,73 @@ start_date = datetime.today() - timedelta(days=30)
 sales_data = []
 
 # Define special event days
-special_event_days = random.sample(range(30), 4)  # Pick 4 random event days
-bad_weather_days = random.sample(range(30), 3)  # Pick 3 random days with fewer sales
+special_event_days = random.sample(range(30), 4)  
+bad_weather_days = random.sample(range(30), 2)  
+low_sales_days = random.sample(range(30), 3)  
 
-for day in range(30):  
+for day in range(31):  # Include Feb 8 and Feb 9
     sale_date = start_date + timedelta(days=day)  
     weekday = sale_date.weekday()  # 0 = Monday, 6 = Sunday
-    
-    # **📌 Base sales target per day**
-    if day < 7:
-        daily_sales_target = random.randint(50 + (day * 30), 250 + (day * 40))  # Slow increase
-    elif day < 14:
-        daily_sales_target = random.randint(300 + (day * 20), 500 + (day * 30))  # More gradual
+
+    print(f"📅 Processing {sale_date.strftime('%Y-%m-%d')} (Weekday: {weekday})")  # Debugging print
+
+    # **📌 Simulating "Store Opening" Growth**
+    if day == 0:  
+        daily_sales_target = random.randint(20, 50)
+    elif day == 1:
+        daily_sales_target = random.randint(50, 150)
+    elif day == 2:
+        daily_sales_target = random.randint(100, 250)
+    elif day == 3:
+        daily_sales_target = random.randint(150, 300)
+    elif day == 4:
+        daily_sales_target = random.randint(200, 400)
+    elif day < 7:
+        daily_sales_target = random.randint(300, 600)
     else:
-        daily_sales_target = random.randint(500, 1200)  # Normal range for stable store
+        daily_sales_target = random.randint(500, 1200)  
 
-    # **📌 Weekend Sales Boost**
-    if weekday in [5, 6]:  # Saturday, Sunday
-        daily_sales_target = min(int(daily_sales_target * random.uniform(1.1, 1.4)), 1500)
+    # **📌 Ensure No Day Drops Below 100 After Day 3**
+    if day >= 3:
+        daily_sales_target = max(daily_sales_target, 100)
 
-    # **📌 Monday Slight Drop**
-    if weekday == 0:  
-        daily_sales_target = max(int(daily_sales_target * random.uniform(0.8, 0.95)), 400)
+    # **📌 Ensure Any Weekend After Week 1 Has 900+ Sales**
+    if day >= 7 and weekday == 5:  # Saturday
+        print(f"🔴 Boosting Saturday {sale_date.strftime('%Y-%m-%d')} to at least 900 sales.")
+        daily_sales_target = max(daily_sales_target, 900)
+    elif day >= 7 and weekday == 6:  # Sunday
+        print(f"🔴 Boosting Sunday {sale_date.strftime('%Y-%m-%d')} to at least 900 sales.")
+        daily_sales_target = max(daily_sales_target, 900)
 
-    # **📌 Payday Spikes**
-    if sale_date.day in [1, 16]:  # Payday on the 1st and 16th
+    # **📌 Handling Bad Weather Days (Lower Sales, But Not Dead)**
+    if day in bad_weather_days:
+        daily_sales_target = int(daily_sales_target * random.uniform(0.6, 0.8))
+        daily_sales_target = max(daily_sales_target, 250)  
+
+    # **📌 Adding Some Random Slow Days (~3 Total)**
+    if day in low_sales_days:
+        daily_sales_target = int(daily_sales_target * random.uniform(0.7, 0.9))
+        daily_sales_target = max(daily_sales_target, 200)
+
+    # **📌 Prevent Monday from Being Too High**
+    if weekday == 0 and day >= 7:  
+        daily_sales_target = min(daily_sales_target, int(sum([random.randint(600, 1200) for _ in range(5)]) / 5 * 1.5))
+
+    # **📌 Thursdays & Fridays Slight Boost**
+    if weekday in [3, 4]:  
+        daily_sales_target = int(daily_sales_target * random.uniform(1.1, 1.2))
+
+    # **📌 Payday Spikes (1st & 16th)**
+    if sale_date.day in [1, 16]:  
         daily_sales_target = int(daily_sales_target * random.uniform(1.3, 1.6))
 
-    # **📌 Special Event Days**
-    if day in special_event_days:
-        daily_sales_target = int(daily_sales_target * random.uniform(1.4, 1.8))  
-
-    # **📌 Bad Weather Days (Reduce Sales by 30-50%)**
-    if day in bad_weather_days:
-        daily_sales_target = int(daily_sales_target * random.uniform(0.5, 0.7))
-
-    # **📌 Random Bad Sales Days (~10% chance)**
-    if random.random() < 0.1:
-        daily_sales_target = int(daily_sales_target * random.uniform(0.5, 0.8))  
+    # **📌 🔥 FINAL OVERRIDE to Ensure 900+ on Feb 8 and Feb 9**
+    if sale_date.strftime('%Y-%m-%d') == '2025-02-08':
+        print(f"🔴 Fixing sales for {sale_date.strftime('%Y-%m-%d')} - Enforcing 900+ sales")  
+        daily_sales_target = 900  # 💯 FINAL FIX
+    if sale_date.strftime('%Y-%m-%d') == '2025-02-09':
+        print(f"🔴 Fixing sales for {sale_date.strftime('%Y-%m-%d')} - Enforcing 900+ sales")  
+        daily_sales_target = 900  # 💯 FINAL FIX
 
     total_sales = 0  
 
@@ -68,21 +97,26 @@ for day in range(30):
             if total_sales >= daily_sales_target:
                 break  
 
-            # **📌 Hourly Sales Distribution**
-            if 6 <= hour < 10:   # Morning (low sales)
-                sales_multiplier = 0.25
-            elif 11 <= hour < 15: # Lunch & afternoon (moderate sales)
-                sales_multiplier = 0.5
-            elif 16 <= hour < 21: # Evening peak (high sales)
-                sales_multiplier = 0.8
-            elif 21 <= hour < 23: # Late-night shopping (very low)
-                sales_multiplier = 0.2
-            else:                 # After 11 PM (almost no sales)
-                sales_multiplier = 0.05
+            # **📌 Ensure Even Distribution of Sales**
+            # **📌 Special Boost for Feb 8 & 9**
+            if sale_date.strftime('%Y-%m-%d') in ['2025-02-08', '2025-02-09']:
+                sales_multiplier = 0.95  # **Very high chance of sale happening**
+            else:
+                if 6 <= hour < 10:   
+                    sales_multiplier = 0.25
+                elif 11 <= hour < 15: 
+                    sales_multiplier = 0.5
+                elif 16 <= hour < 21: 
+                    sales_multiplier = 0.8
+                elif 21 <= hour < 23: 
+                    sales_multiplier = 0.2
+                else:                 
+                    sales_multiplier = 0.05
+
 
             # **📌 Simulate stock shortages (~5% chance per day)**
             if random.random() < 0.05:
-                continue  # Skip adding sales due to stockout
+                continue  
 
             if random.random() < sales_multiplier:
                 product = random.choice(products)
@@ -97,6 +131,29 @@ for day in range(30):
                 
                 sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
                 total_sales += 1  
+    
+    # **📌 FINAL ENFORCEMENT: Manually Ensure 900+ Sales for Feb 8 & 9**
+    for fix_date in ['2025-02-08', '2025-02-09']:
+        current_sales = sum(1 for sale in sales_data if sale[3].startswith(fix_date))
+        missing_sales = 900 - current_sales
+        
+        if missing_sales > 0:
+            print(f"⚠️ Enforcing extra {missing_sales} sales for {fix_date}")
+            
+            for _ in range(missing_sales):
+                product = random.choice(products)
+                product_id, price = product
+                quantity_sold = random.randint(1, 5)
+                total_price = quantity_sold * float(price)
+
+                random_hour = random.randint(6, 22)  # Favor peak hours
+                random_minute = random.randint(0, 59)
+                random_second = random.randint(0, 59)
+                final_sale_date = datetime.strptime(fix_date, "%Y-%m-%d") + timedelta(hours=random_hour, minutes=random_minute, seconds=random_second)
+
+                sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
+
+
 
 # **📌 Batch insert for better performance**
 cursor.executemany("""
@@ -109,4 +166,4 @@ conn.commit()
 # Close connection
 cursor.close()
 conn.close()
-print("✅ Sales history has been adjusted & regenerated successfully.") 
+print("✅ Sales history updated with final refinements!") 
