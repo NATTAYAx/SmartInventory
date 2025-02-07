@@ -21,15 +21,15 @@ start_date = datetime.today() - timedelta(days=30)
 
 sales_data = []
 
-# Special event days - set on weekends, Fridays, or paydays (1st & 15th)
-special_event_days = [day for day in range(30) if day % 15 == 0 or (start_date + timedelta(days=day)).weekday() in [4, 5, 6]]
-special_event_days = random.sample(special_event_days, 3)  # Pick 3 days
+# Define special event days
+special_event_days = random.sample(range(30), 4)  # Pick 4 random event days
+bad_weather_days = random.sample(range(30), 3)  # Pick 3 random days with fewer sales
 
 for day in range(30):  
     sale_date = start_date + timedelta(days=day)  
     weekday = sale_date.weekday()  # 0 = Monday, 6 = Sunday
     
-    # **📌 Smoother Growth for First 14 Days**
+    # **📌 Base sales target per day**
     if day < 7:
         daily_sales_target = random.randint(50 + (day * 30), 250 + (day * 40))  # Slow increase
     elif day < 14:
@@ -37,19 +37,29 @@ for day in range(30):
     else:
         daily_sales_target = random.randint(500, 1200)  # Normal range for stable store
 
-    # **📌 Weekend Boost (More Stable)**
-    if weekday in [5, 6]:  # Saturday, Sunday (higher sales)
-        daily_sales_target = min(int(daily_sales_target * 1.2), 1500)  
-    elif weekday == 0:  # Monday (slightly lower sales)
-        daily_sales_target = max(int(daily_sales_target * 0.85), 500)
-    elif weekday == 2:  # Tuesday (prevent dips)
-        daily_sales_target = max(int(daily_sales_target * 1.05), 550)
-    elif weekday == 4:  # Friday (higher, but not extreme)
-        daily_sales_target = min(int(daily_sales_target * 1.1), 1400)
+    # **📌 Weekend Sales Boost**
+    if weekday in [5, 6]:  # Saturday, Sunday
+        daily_sales_target = min(int(daily_sales_target * random.uniform(1.1, 1.4)), 1500)
 
-    # **📌 Special Event Boost (Logical Placement)**
+    # **📌 Monday Slight Drop**
+    if weekday == 0:  
+        daily_sales_target = max(int(daily_sales_target * random.uniform(0.8, 0.95)), 400)
+
+    # **📌 Payday Spikes**
+    if sale_date.day in [1, 16]:  # Payday on the 1st and 16th
+        daily_sales_target = int(daily_sales_target * random.uniform(1.3, 1.6))
+
+    # **📌 Special Event Days**
     if day in special_event_days:
-        daily_sales_target = min(int(daily_sales_target * 1.3), 1500)  
+        daily_sales_target = int(daily_sales_target * random.uniform(1.4, 1.8))  
+
+    # **📌 Bad Weather Days (Reduce Sales by 30-50%)**
+    if day in bad_weather_days:
+        daily_sales_target = int(daily_sales_target * random.uniform(0.5, 0.7))
+
+    # **📌 Random Bad Sales Days (~10% chance)**
+    if random.random() < 0.1:
+        daily_sales_target = int(daily_sales_target * random.uniform(0.5, 0.8))  
 
     total_sales = 0  
 
@@ -57,18 +67,22 @@ for day in range(30):
         for hour in range(24):
             if total_sales >= daily_sales_target:
                 break  
-            
-            # **📌 Adjust Hourly Sales Patterns**
-            if 6 <= hour < 10:   # Morning (low)
-                sales_multiplier = 0.3
-            elif 11 <= hour < 15: # Lunch & afternoon (moderate)
-                sales_multiplier = 0.6
-            elif 16 <= hour < 21: # Evening peak (high)
-                sales_multiplier = 1.0
-            elif 21 <= hour < 23: # Late-night shopping (low)
-                sales_multiplier = 0.3
+
+            # **📌 Hourly Sales Distribution**
+            if 6 <= hour < 10:   # Morning (low sales)
+                sales_multiplier = 0.25
+            elif 11 <= hour < 15: # Lunch & afternoon (moderate sales)
+                sales_multiplier = 0.5
+            elif 16 <= hour < 21: # Evening peak (high sales)
+                sales_multiplier = 0.8
+            elif 21 <= hour < 23: # Late-night shopping (very low)
+                sales_multiplier = 0.2
             else:                 # After 11 PM (almost no sales)
                 sales_multiplier = 0.05
+
+            # **📌 Simulate stock shortages (~5% chance per day)**
+            if random.random() < 0.05:
+                continue  # Skip adding sales due to stockout
 
             if random.random() < sales_multiplier:
                 product = random.choice(products)
@@ -95,4 +109,4 @@ conn.commit()
 # Close connection
 cursor.close()
 conn.close()
-print("✅ Sales history has been adjusted & regenerated successfully.")
+print("✅ Sales history has been adjusted & regenerated successfully.") 
