@@ -1,5 +1,6 @@
 import mysql.connector
 import random
+from collections import Counter
 from datetime import datetime, timedelta
 
 # Connect to MySQL
@@ -13,7 +14,7 @@ conn = mysql.connector.connect(
 cursor = conn.cursor()
 
 # **📌 Clear old sales before inserting new ones**
-cursor.execute("DELETE FROM sales_history WHERE sale_date BETWEEN '2025-01-09' AND '2025-02-09'")
+cursor.execute("DELETE FROM sales_history WHERE sale_date >= CURDATE() - INTERVAL 30 DAY")
 conn.commit()
 print("⚠️ Old sales data cleared for new insertion.")
 
@@ -22,7 +23,8 @@ cursor.execute("SELECT id, price FROM products")
 products = cursor.fetchall()
 
 # Generate sales history for the last 30 days
-start_date = datetime.today() - timedelta(days=30)
+current_date = datetime.today()
+start_date = current_date - timedelta(days=30)
 
 sales_data = []
 
@@ -65,27 +67,34 @@ for day in range(31):  # Include Feb 8 and Feb 9
         print(f"🔴 Boosting Sunday {sale_date.strftime('%Y-%m-%d')} to at least 900 sales.")
         daily_sales_target = max(daily_sales_target, 900)
 
-    # **📌 Handling Bad Weather Days (Lower Sales, But Not Dead)**
-    if day in bad_weather_days:
-        daily_sales_target = int(daily_sales_target * random.uniform(0.6, 0.8))
-        daily_sales_target = max(daily_sales_target, 250)
-
-    # **📌 Adding Some Random Slow Days (~3 Total)**
-    if day in low_sales_days:
-        daily_sales_target = int(daily_sales_target * random.uniform(0.7, 0.9))
-        daily_sales_target = max(daily_sales_target, 200)
-
-    # **📌 Prevent Monday from Being Too High**
+    # **📌 Reduce Monday Sales (10-20% lower than Sunday)**
     if weekday == 0 and day >= 7:
-        daily_sales_target = min(daily_sales_target, int(sum([random.randint(600, 1200) for _ in range(5)]) / 5 * 1.5))
+        daily_sales_target = int(daily_sales_target * random.uniform(0.9, 0.95))
 
-    # **📌 Thursdays & Fridays Slight Boost**
-    if weekday in [3, 4]:
+    if weekday == 1:  # Tuesday (Slight adjustment)
+        daily_sales_target = int(daily_sales_target * random.uniform(0.9, 1.0))
+    
+    if weekday == 3:  # Thursday
+        daily_sales_target = int(daily_sales_target * random.uniform(0.9, 0.95))
+
+    if weekday == 4:  # Thursday (Slight boost)
+        daily_sales_target = int(daily_sales_target * random.uniform(1.05, 1.2))
+    if weekday == 5:  # Friday (Slight boost)
         daily_sales_target = int(daily_sales_target * random.uniform(1.1, 1.2))
-
-    # **📌 Payday Spikes (1st & 16th)**
+    
+    # **📌 Thursdays & Fridays Slight Boost (5-15%)**
+    if weekday in [3, 4]:
+        daily_sales_target = int(daily_sales_target * random.uniform(1.05, 1.15))
+    
+    # **📌 Payday Spikes (1st & 16th), Gradual Drop-off**
     if sale_date.day in [1, 16]:
-        daily_sales_target = int(daily_sales_target * random.uniform(1.3, 1.6))
+        daily_sales_target *= random.uniform(1.2, 1.5)  # Big boost
+    elif sale_date.day in [2, 3, 17, 18]:  # Gradual drop-off
+        daily_sales_target *= random.uniform(1.1, 1.3)
+
+    # **📌 Holiday Adjustments (e.g., Valentine's Day)**
+    if sale_date.strftime('%Y-%m-%d') == "2025-02-14":
+        daily_sales_target = int(daily_sales_target * random.uniform(1.2, 1.5))  # Special boost for snacks, gifts
 
     total_sales = 0
 
@@ -94,16 +103,16 @@ for day in range(31):  # Include Feb 8 and Feb 9
             if total_sales >= daily_sales_target:
                 break
 
-            # **📌 Ensure Even Distribution of Sales**
-            sales_multiplier = 0.05
-            if 6 <= hour < 10:
+            # **📌 Adjust Hourly Sales Based on Product Types**
+            sales_multiplier = 0.05  # Default low sales
+            if 6 <= hour < 10:  # Morning (Breakfast, coffee)
                 sales_multiplier = 0.25
-            elif 11 <= hour < 15:
+            elif 11 <= hour < 14:  # Lunch break (Snacks, ready-to-eat)
                 sales_multiplier = 0.5
-            elif 16 <= hour < 21:
+            elif 16 <= hour < 20:  # Evening (Groceries, essentials)
                 sales_multiplier = 0.8
-            elif 21 <= hour < 23:
-                sales_multiplier = 0.2
+            elif 21 <= hour < 23:  # Late night (Snacks, energy drinks)
+                sales_multiplier = 0.3
 
             # **📌 Simulate stock shortages (~5% chance per day)**
             if random.random() < 0.05:
@@ -122,13 +131,22 @@ for day in range(31):  # Include Feb 8 and Feb 9
                 sales_data.append((product_id, quantity_sold, total_price, final_sale_date.strftime('%Y-%m-%d %H:%M:%S')))
                 total_sales += 1
 
-# **📌 FINAL ENFORCEMENT FOR FEB 9 (ENSURE IT STAYS 900+)**
+# **📌 FINAL ENFORCEMENT FOR FEB 9 (Ensure gradual increase)**
 final_sales_count = sum(1 for sale in sales_data if sale[3].startswith('2025-02-09'))
-random_target_for_feb9 = random.randint(900, 2000)  # Set the target range
 
-if final_sales_count < random_target_for_feb9:
-    missing_sales = random_target_for_feb9 - final_sales_count
-    print(f"⚠️ Enforcing extra {missing_sales} sales for Feb 9 (Target: {random_target_for_feb9})")
+# ✅ Use past 5 days' average to calculate Feb 9 sales
+daily_sales_counts = Counter(sale[3][:10] for sale in sales_data)
+last_5_days = list(daily_sales_counts.values())[-5:]
+
+if last_5_days:
+    avg_recent_sales = sum(last_5_days) / len(last_5_days)
+    feb9_target = int(avg_recent_sales * random.uniform(1.1, 1.3))  # 10-30% increase
+else:
+    feb9_target = random.randint(900, 2000)  # Fallback if no prior data
+
+if final_sales_count < feb9_target:
+    missing_sales = feb9_target - final_sales_count
+    print(f"⚠️ Enforcing extra {missing_sales} sales for Feb 9 (Target: {feb9_target})")
 
     for _ in range(missing_sales):
         product = random.choice(products)
@@ -152,8 +170,6 @@ cursor.executemany("""
 """, sales_data)
 
 conn.commit()
-
-# Close connection
 cursor.close()
 conn.close()
 print("✅ Sales history updated with final refinements!")
