@@ -34,7 +34,6 @@ products = [
     (8859411300719, "ARO Pop-up Napkin (90 sheet)", 12, "Household", "ARO"),
     (8850250002345, "Ajinomoto Lite Sugar Low Calorie (80g)", 20, "Food", "Ajinomoto"),
     (5000167329421, "Soap&Glory Magnifi-coco - Nourishing Body Lotion (550ml)", 323, "Beauty", "Soap & Glory"),
-    
     (8850999015434, "M-150 Energy Drink (150ml)", 10, "Beverage", "M-150"),
     (8850999015441, "Sponsor Original Energy Drink (250ml)", 15, "Beverage", "Sponsor"),
     (8850127088812, "Dutch Mill Yogurt Drink - Strawberry (180ml)", 12, "Beverage", "Dutch Mill"),
@@ -164,62 +163,90 @@ products = [
 # Define bulk purchase sizes for each category
 def get_stock(category, name):
     bulk_sizes = {
-        "Beverage": [24, 48, 60, 72, 96], 
-        "Snack": [24, 36, 48, 72],
-        "Candy": [24, 36, 48], 
-        "Food": [24, 36, 48, 72],  # Added bulk size for food
-        "Household": [24, 48, 72, 96],
-        "Stationery": [24, 36, 50, 100, 150],  # Adjusted for paper stock
-        "Electronics": [5, 10, 20],
-        "Beauty": [12, 24, 36],
-        "Medicine": [12, 24, 36, 48],
-        "Personal Care": [24, 36, 48],
+        "Beverage": [24, 36, 48],  # Lowered max to avoid excess
+        "Snack": [24, 36, 48],  # Removed 72 to prevent overstock
+        "Candy": [24, 36],  # Candy has slower turnover
+        "Food": [24, 36, 48],  # Removed 72 for better control
+        "Household": [24, 36, 48],  # Lowered excessive stocking
+        "Stationery": [24, 36, 50],  # Reduced highest stock
+        "Electronics": [5, 10],  # Only slow-moving electronics
+        "Beauty": [12, 24],  # Reduced excess stock
+        "Medicine": [12, 24],  # Prevent excessive medicine storage
+        "Personal Care": [24, 36],  # Adjusted to lower excess
     }
 
-    # Handling perishability for food
+    # **Handling perishability for food & beverages**
     perishable_keywords = ["Yogurt", "Milk"]
     if category in ["Food", "Beverage"] and any(perishable in name for perishable in perishable_keywords):
-        return random.choice([24, 36, 48])  # Lower stock for perishable items
+        return random.choice([24, 36])  # Reduced for perishables
 
-    # Special handling for specific product types
+    # **Specific category-based adjustments**
     if "Energy Drink" in name:
-        return random.choice([24, 36, 48, 60])
+        return random.choice([24, 36])  # Controlled due to fast turnover
 
-    if "Sauce" in name:
-        return random.choice([24, 36, 48])
+    if "Sauce" in name or "Chili Paste" in name:
+        return random.choice([24, 36])  # Lower stock since they last long
 
     if "Noodles" in name:
-        return random.choice([24, 36, 48])
+        return random.choice([24, 36])  # Medium stock for steady sales
 
-    if "Chili Paste" in name:
-        return random.choice([24, 36, 48])
+    # **Large beverage adjustments (e.g., Coca-Cola 2L, Pepsi 1.5L)**
+    if category == "Beverage" and ("Coca Cola" in name or "Pepsi" in name):
+        return random.choice([24, 36])  # Prevent excessive unsold units
 
-    # Specific product overrides
-    if "Double A A4 Paper (500 sheets)" in name:
-        return random.choice([24, 36])  # Reduced from 50
+    # **Reduce stock for slow-moving items**
+    if "Broad Beans" in name:
+        return random.choice([24, 36])  # Limited demand, lower stock
 
-    if "Breeze Color Care Liquid Detergent (3.6L)" in name:
-        return random.choice([48, 72])  # Reduced from 96
+    if "Cup Porridge" in name:
+        return random.choice([24, 36])  # Moderate demand, lower stock
 
-    return random.choice(bulk_sizes.get(category, [24, 48]))  # Default for non-perishable
+    # **Adjusting high-stock stationery**
+    if "Zebra Sarasa Clip Gel Pen" in name:
+        return random.choice([24, 36])  # Lower from 72
+
+    if "Post-it Notes" in name:
+        return random.choice([24, 36])  # Lower from 50
+
+    # **Refining specific products based on sales trend**
+    if "7-Up Light" in name:
+        return random.choice([24, 36])  # Increased slightly from 24
+
+    if "Nescafe Coffee" in name:
+        return random.choice([24, 36])  # Adjusted for steady demand
+
+    if "Lactasoy Soy Milk" in name:
+        return random.choice([36, 48])  # Soy milk has steady demand
+
+    return random.choice(bulk_sizes.get(category, [24, 36]))  # Default for non-perishable items
 
 # Open SQL file to write data.
-with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f:
-    f.write("INSERT INTO products (id, name, price, stock, avg_sales_per_day, category, brand_name) VALUES\n")
+with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
+     open("FirstVersionOfProductsDB.pydata", "w", encoding="utf-8") as f_py:
+         
+    f_sql.write("INSERT INTO products (id, name, price, stock, avg_sales_per_day, category, brand_name) VALUES\n")
 
-    values = []
+    values_sql = []
+    values_py = []
+    
     for product in products:
         product_id, name, price, category, brand_name = product
         stock = get_stock(category, name)
-        
-        # Fix single quotes by doubling them for SQL
-        name = name.replace("'", "''")
-        brand_name = brand_name.replace("'", "''")
 
-        # Append SQL value row
-        values.append(f"({product_id}, '{name}', {price}, {stock}, NULL, '{category}', '{brand_name}')")
+        # Fix single quotes for SQL
+        name_sql = name.replace("'", "''")
+        brand_sql = brand_name.replace("'", "''")
 
-    # Write values to file
-    f.write(",\n".join(values) + ";\n")
+        # Format SQL row with avg_sales_per_day as NULL
+        values_sql.append(f"({product_id}, '{name_sql}', {price}, {stock}, NULL, '{category}', '{brand_sql}')")
 
-print("'FirstVersionOfProductsDB.sql' generated complete")
+        # Format Python-compatible row with avg_sales_per_day as None
+        values_py.append(f"({product_id}, '{name}', {price}, {stock}, None, '{category}', '{brand_name}')")
+
+    # Write to SQL file
+    f_sql.write(",\n".join(values_sql) + ";\n")
+
+    # Write to Python data file
+    f_py.write("[\n" + ",\n".join(values_py) + "\n]\n")
+    
+print("'FirstVersionOfProductsDB.sql' and 'FirstVersionOfProductsDB.pydata' generated complete")
