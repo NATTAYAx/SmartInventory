@@ -1,6 +1,10 @@
 #This code is for random the value of stock and avg_sales_per_day for the project.
 
 import random
+import logging
+
+# Setup logging to track stock assignments
+logging.basicConfig(filename="stock_log.txt", level=logging.INFO, format="%(asctime)s - %(message)s")
 
 products = [
     (8852023672021, "Koh-Kae Coated Broad Beans - Shrimp Flavour", 10, "Snack", "Koh-Kae"),
@@ -30,7 +34,7 @@ products = [
     (8854698010443, "Oishi Green Tea Japanese Green Tea With Honey Lemon (800ml)", 30, "Beverage", "Oishi"),
     (8859015705996, "VIT-A-DAY Vitamin Water C 1000 Kyoho Grape (480ml)", 20, "Beverage", "VIT-A-DAY"),
     (8853474076123, "Favory Brand Natural Sesame Oil (100ml)", 42, "Food", "Favory"),
-    (8858973399995, "5 Stars Korat Noodles (230g)", 41, "Food", "5 Stars"),
+    (8858973399995, "5 Stars Korat Noodles (230g)", 41, "Instant Noodles", "5 Stars"),
     (8859411300719, "ARO Pop-up Napkin (90 sheet)", 12, "Household", "ARO"),
     (8850250002345, "Ajinomoto Lite Sugar Low Calorie (80g)", 20, "Food", "Ajinomoto"),
     (5000167329421, "Soap&Glory Magnifi-coco - Nourishing Body Lotion (550ml)", 323, "Beauty", "Soap & Glory"),
@@ -38,8 +42,8 @@ products = [
     (8850999015441, "Sponsor Original Energy Drink (250ml)", 15, "Beverage", "Sponsor"),
     (8850127088812, "Dutch Mill Yogurt Drink - Strawberry (180ml)", 12, "Beverage", "Dutch Mill"),
     (8850127088829, "Dutch Mill Yogurt Drink - Mixed Fruits (180ml)", 12, "Beverage", "Dutch Mill"),
-    (8850987654321, "Mama Cup Noodles - Shrimp Tom Yum (60g)", 16, "Food", "Mama"),
-    (8850987654338, "Mama Cup Noodles - Pork Flavor (60g)", 16, "Food", "Mama"),
+    (8850987654321, "Mama Cup Noodles - Shrimp Tom Yum (60g)", 16, "Instant Noodles", "Mama"),
+    (8850987654338, "Mama Cup Noodles - Pork Flavor (60g)", 16, "Instant Noodles", "Mama"),
     (8858891303015, "Tesco Lotus Kitchen Paper Towel (2 rolls)", 35, "Household", "Tesco"),
     (8858891303022, "Tesco Lotus Bathroom Tissue (12 rolls)", 109, "Household", "Tesco"),
     (8851932388888, "Colgate Total Professional Clean Toothpaste (150g)", 55, "Personal Care", "Colgate"),
@@ -82,8 +86,8 @@ products = [
     (8858891305029, "Systema Toothbrush - Medium", 35, "Personal Care", "Systema"),
     (8850325077123, "Safeguard Pure White Bath Soap (135g)", 35, "Personal Care", "Safeguard"),
     (8850325077130, "Safeguard Lemon Fresh Bath Soap (135g)", 35, "Personal Care", "Safeguard"),
-    (8850987622222, "Mama Instant Noodles - Pork (55g)", 6, "Food", "Mama"),
-    (8850987622239, "Mama Instant Noodles - Shrimp Tom Yum (55g)", 6, "Food", "Mama"),
+    (8850987622222, "Mama Instant Noodles - Pork (55g)", 6, "Instant Noodles", "Mama"),
+    (8850987622239, "Mama Instant Noodles - Shrimp Tom Yum (55g)", 6, "Instant Noodles", "Mama"),
     (8851932366666, "Knorr Cup Porridge - Pork (35g)", 20, "Food", "Knorr"),
     (8851932366673, "Knorr Cup Porridge - Chicken (35g)", 20, "Food", "Knorr"),
     (8850722833333, "UFC Sweet Chili Sauce (340g)", 35, "Food", "UFC"),
@@ -161,64 +165,40 @@ products = [
 ]
 
 # Define bulk purchase sizes for each category
+default_bulk_sizes = {
+    "Beverage": [48, 72, 96],  
+    "Snack": [48, 72, 96],  
+    "Candy": [24, 36, 48],  
+    "Food": [36, 48, 72],  
+    "Instant Noodles": [48, 72, 96, 120],  
+    "Household": [12, 24, 36],  
+    "Stationery": [12, 24],  
+    "Electronics": [3, 5, 10],  
+    "Beauty": [12, 24, 36],  
+    "Medicine": [5, 10, 15],  
+    "Personal Care": [24, 36, 48],  
+}
+
+# **Handling perishability for food & beverages**
+# ✅ Comprehensive Perishable Keywords
+highly_perishable = ["Yogurt", "Milk", "Fresh Juice", "Salad", "Dairy", "Cheese", "Butter", "Egg", "Cream", "Fresh Meat", "Seafood"]
+moderately_perishable = ["Cup Porridge", "Ready Meal", "Frozen", "Bread", "Cooked", "Pasta Sauce", "Jam", "Tofu", "Nut Butter"]
+long_shelf_life = ["Canned", "Dried", "Powdered", "Instant"]
+
 def get_stock(category, name):
-    bulk_sizes = {
-        "Beverage": [24, 36, 48],  # Lowered max to avoid excess
-        "Snack": [24, 36, 48],  # Removed 72 to prevent overstock
-        "Candy": [24, 36],  # Candy has slower turnover
-        "Food": [24, 36, 48],  # Removed 72 for better control
-        "Household": [24, 36, 48],  # Lowered excessive stocking
-        "Stationery": [24, 36, 50],  # Reduced highest stock
-        "Electronics": [5, 10],  # Only slow-moving electronics
-        "Beauty": [12, 24],  # Reduced excess stock
-        "Medicine": [12, 24],  # Prevent excessive medicine storage
-        "Personal Care": [24, 36],  # Adjusted to lower excess
-    }
+    if any(keyword in name for keyword in highly_perishable):
+        stock_value = random.choice([12, 24, 36])  # Small stock to avoid spoilage
+    elif any(keyword in name for keyword in moderately_perishable):
+        stock_value = random.choice([24, 36, 48])  # Moderate stock
+    elif any(keyword in name for keyword in long_shelf_life):
+        stock_value = random.choice([48, 72])  # Standard bulk purchase
+    else:
+        stock_value = random.choice(default_bulk_sizes.get(category, [24, 36]))  # Default for non-perishables
 
-    # **Handling perishability for food & beverages**
-    perishable_keywords = ["Yogurt", "Milk"]
-    if category in ["Food", "Beverage"] and any(perishable in name for perishable in perishable_keywords):
-        return random.choice([24, 36])  # Reduced for perishables
-
-    # **Specific category-based adjustments**
-    if "Energy Drink" in name:
-        return random.choice([24, 36])  # Controlled due to fast turnover
-
-    if "Sauce" in name or "Chili Paste" in name:
-        return random.choice([24, 36])  # Lower stock since they last long
-
-    if "Noodles" in name:
-        return random.choice([24, 36])  # Medium stock for steady sales
-
-    # **Large beverage adjustments (e.g., Coca-Cola 2L, Pepsi 1.5L)**
-    if category == "Beverage" and ("Coca Cola" in name or "Pepsi" in name):
-        return random.choice([24, 36])  # Prevent excessive unsold units
-
-    # **Reduce stock for slow-moving items**
-    if "Broad Beans" in name:
-        return random.choice([24, 36])  # Limited demand, lower stock
-
-    if "Cup Porridge" in name:
-        return random.choice([24, 36])  # Moderate demand, lower stock
-
-    # **Adjusting high-stock stationery**
-    if "Zebra Sarasa Clip Gel Pen" in name:
-        return random.choice([24, 36])  # Lower from 72
-
-    if "Post-it Notes" in name:
-        return random.choice([24, 36])  # Lower from 50
-
-    # **Refining specific products based on sales trend**
-    if "7-Up Light" in name:
-        return random.choice([24, 36])  # Increased slightly from 24
-
-    if "Nescafe Coffee" in name:
-        return random.choice([24, 36])  # Adjusted for steady demand
-
-    if "Lactasoy Soy Milk" in name:
-        return random.choice([36, 48])  # Soy milk has steady demand
-
-    return random.choice(bulk_sizes.get(category, [24, 36]))  # Default for non-perishable items
+    # ✅ Log the assigned stock for debugging
+    logging.info(f"Assigned stock {stock_value} for {name} ({category})")
+    
+    return stock_value
 
 # Open SQL file to write data.
 with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
@@ -231,7 +211,7 @@ with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
     
     for product in products:
         product_id, name, price, category, brand_name = product
-        stock = get_stock(category, name)
+        stock = get_stock(category, name)  # ✅ This actually assigns stock!
 
         # Fix single quotes for SQL
         name_sql = name.replace("'", "''")
@@ -243,10 +223,10 @@ with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
         # Format Python-compatible row with avg_sales_per_day as None
         values_py.append(f"({product_id}, '{name}', {price}, {stock}, None, '{category}', '{brand_name}')")
 
-    # Write to SQL file
+    # ✅ Write to SQL file
     f_sql.write(",\n".join(values_sql) + ";\n")
 
-    # Write to Python data file
+    # ✅ Write to Python data file
     f_py.write("[\n" + ",\n".join(values_py) + "\n]\n")
-    
+
 print("'FirstVersionOfProductsDB.sql' and 'FirstVersionOfProductsDB.pydata' generated complete")
