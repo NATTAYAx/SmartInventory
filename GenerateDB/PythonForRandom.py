@@ -316,7 +316,7 @@ products = [
 with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
      open("FirstVersionOfProductsDB.pydata", "w", encoding="utf-8") as f_py:
     
-    f_sql.write("INSERT INTO products (id, name, price, stock, avg_sales_per_day, category_id, brand_name) VALUES\n")
+    f_sql.write("INSERT INTO products (id, name, price, stock, initial_stock, avg_sales_per_day, category_id, brand_name) VALUES\n")
 
     values_sql = []
     values_py = []
@@ -330,16 +330,17 @@ with open("FirstVersionOfProductsDB.sql", "w", encoding="utf-8") as f_sql, \
             continue
 
         stock = get_stock(main_category, name)
-
+        initial_stock = stock
+        
         # Fix single quotes for SQL
         name_sql = name.replace("'", "''")
         brand_sql = brand_name.replace("'", "''")
 
         # Format SQL row
-        values_sql.append(f"({product_id}, '{name_sql}', {price}, {stock}, NULL, {category_id}, '{brand_sql}')")
+        values_sql.append(f"({product_id}, '{name_sql}', {price}, {stock}, {initial_stock}, NULL, {category_id}, '{brand_sql}')")
 
         # Format Python-compatible row
-        values_py.append(f"({product_id}, '{name}', {price}, {stock}, None, {category_id}, '{brand_name}')")
+        values_py.append(f"({product_id}, '{name}', {price}, {stock}, {initial_stock}, None, {category_id}, '{brand_name}')")
 
     # Write to SQL file
     f_sql.write(",\n".join(values_sql) + ";\n")
