@@ -126,7 +126,7 @@ def get_daily_sales_target(day, sale_date, weekday):
 
     # 📌 Gradual Growth in First Month
     if day == 0:
-        daily_sales_target = random.randint(150, 250)
+        daily_sales_target = random.randint(100, 250)
     elif day == 1:
         daily_sales_target = random.randint(250, 350)
     elif day == 2:
@@ -154,7 +154,6 @@ def get_daily_sales_target(day, sale_date, weekday):
         daily_sales_target = int(daily_sales_target * random.uniform(1.15, 1.3))  # Slightly lower than Sat
     elif weekday == 4:  # Friday (People shopping for weekend)
         daily_sales_target = int(daily_sales_target * random.uniform(1.05, 1.15))  
-
 
     # 📌 Pre-Weekend Boost (Thursday & Friday)
     if weekday in [3, 4]:
@@ -188,23 +187,30 @@ def get_daily_sales_target(day, sale_date, weekday):
     return max(200, int(daily_sales_target))  # Ensure sales never drop below 200
 
 def apply_pending_restocks(current_date):
-    """Applies any scheduled restocks that have arrived at the store before sales processing."""
+    """Applies scheduled restocks before processing sales, ensuring no constraint violations."""
     if current_date in pending_restocks:
         print(f"📦 Applying restocks scheduled for {current_date.strftime('%Y-%m-%d')}...")
 
         for product_id, restock_amount in pending_restocks[current_date]:
-            # Update stock immediately in the database
-            cursor.execute(
-                "UPDATE products SET stock = stock + %s WHERE id = %s",
-                (restock_amount, product_id)
-            )
-            print(f"✅ Restocked {restock_amount} units for product ID {product_id}")
+            cursor.execute("SELECT stock, max_stock FROM products WHERE id = %s", (product_id,))
+            current_stock, max_stock = cursor.fetchone()
+
+            # 🛠 Ensure new stock does not exceed max_stock
+            new_stock = min(current_stock + restock_amount, max_stock)
+
+            # Prevent check constraint violations
+            if new_stock < 0 or new_stock > max_stock:
+                print(f"⚠️ Skipping restock for Product ID {product_id} (stock limit reached)")
+                continue  # Skip this product if it violates stock constraints
+
+            # Update only if it's a valid restock
+            cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (new_stock, product_id))
+            print(f"✅ Restocked {new_stock - current_stock} units for Product ID {product_id}")
 
         conn.commit()  # Save changes
-        del pending_restocks[current_date]  # Remove processed restocks
+        del pending_restocks[current_date]
         
 # **📌 Restocking Function**
-
 def replenish_stock(current_date):
     print(f"🔄 Checking stock levels for {current_date.strftime('%Y-%m-%d')}")
 
@@ -241,22 +247,34 @@ def replenish_stock(current_date):
         max_safe_stock = avg_daily_sales * 10  # Ensure only 10 days' worth of stock
         max_safe_stock = min(max_safe_stock, max_stock)  # Cap at product's max_stock limit
 
-        # ✅ **If stock exceeds safe limit, skip restocking**
-        if stock > max_safe_stock:
-            print(f"🚫 Skipping restock for {name} (ID: {product_id}) - Overstocked (Stock: {stock}, Safe Max: {max_safe_stock})")
-            continue  # Skip this product
+        # ✅ Skip restocking if no sales history exists (prevents overfilling new products)
+        if avg_daily_sales == 0 and stock == 0:
+            print(f"⚠️ First-time restock for {name} (ID: {product_id}) - No sales history, setting safe initial stock.")
+            base_restock = max(MOQ.get(category, 10), 30)
+            
+            # Directly set stock in the database
+            cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (base_restock, product_id))
+            conn.commit()
 
         # ✅ **If stock is 0 but high demand, prioritize restock**
         if stock == 0 and avg_daily_sales > 10:
             restock_days = 1  # Urgent next-day restock
-
-        # ✅ **Random Variation to Simulate Real Supply Chain Delays**
-        lead_time = random.randint(restock_days - 1, restock_days + 2)
+            
+        # ✅ Stagger first-time restocks to avoid mass refills on Day 1
+        if avg_daily_sales == 0:
+            lead_time = random.randint(7, 14)  # Delay new product restocks by 1-2 weeks
+        else:
+            lead_time = random.randint(restock_days - 1, restock_days + 2)
         lead_time = max(1, lead_time)  # Ensure at least 1-day lead time
 
+        # ✅ Prevent aggressive restocking in first run if sales history is empty
+        if avg_daily_sales == 0:  
+            base_restock = min(MOQ.get(category, 10), 50)  # Initial restock cap
+        else:
+            base_restock = max(avg_daily_sales * 7, MOQ.get(category, 10))  # Normal behavior
+            
         # ✅ **Calculate Restock Amount with Integer Precision**
-        base_restock = max(avg_daily_sales * 7, MOQ.get(category, 10))  # Ensure 7+ days' worth of stock
-        restock_amount = int(round(min(base_restock, max_safe_stock - stock)))  # Convert to integer to avoid float precision issues
+        restock_amount = max(MOQ.get(category, 10), int(round(min(base_restock, max_safe_stock - stock)))) # Convert to integer to avoid float precision issues
 
         # ✅ **Schedule Restock**
         arrival_date = current_date + timedelta(days=lead_time)
@@ -278,6 +296,9 @@ for day in range(31):
     weekday = sale_date.weekday()
 
     print(f"📅 Processing {sale_date.strftime('%Y-%m-%d')} (Weekday: {weekday})")
+
+    # **✅ Apply Restocks BEFORE Processing Sales**
+    apply_pending_restocks(sale_date)  # 🛠 FIXED: Apply restocks at the start of the day
 
     # **📌 Apply Holiday Effects**
     base_sales = get_daily_sales_target(day, sale_date, weekday)
