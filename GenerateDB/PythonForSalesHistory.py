@@ -62,6 +62,7 @@ MOQ = {
 
 # ✅ **Pending Restock Orders Dictionary**
 pending_restocks = {}
+recent_stockouts = {}
 
 # ✅ **Rare Events for Long-Term Shortages**
 LONG_TERM_SHORTAGE_PROBABILITY = 0.0005  # chance a product will not restock for months
@@ -126,19 +127,13 @@ def get_daily_sales_target(day, sale_date, weekday):
 
     # 📌 Gradual Growth in First Month
     if day == 0:
-        daily_sales_target = random.randint(100, 250)
-    elif day == 1:
-        daily_sales_target = random.randint(250, 350)
-    elif day == 2:
-        daily_sales_target = random.randint(350, 500)
-    elif day == 3:
-        daily_sales_target = random.randint(450, 700)
-    elif day == 4:
-        daily_sales_target = random.randint(600, 800)
+        daily_sales_target = random.randint(50, 150)
+    elif day < 3:
+        daily_sales_target = random.randint(150, 300)  # Slight increase over the first few days
     elif day < 7:
-        daily_sales_target = random.randint(700, 1100)
+        daily_sales_target = random.randint(300, 600)  # Increase gradually
     else:
-        daily_sales_target = random.randint(900, 1300)  # Normal range
+        daily_sales_target = random.randint(700, 1200)  # Normal operation range
 
     # 📌 Weekend Boost (Sat-Sun)
     if weekday in [5, 6]:
@@ -184,10 +179,26 @@ def get_daily_sales_target(day, sale_date, weekday):
         daily_sales_target = int(daily_sales_target * random.uniform(0.5, 0.8))  # -20% to -50%
         print(f"🔻 LOW SALES DAY on {sale_date.strftime('%Y-%m-%d')}! Sales dropped.")
 
+    # 📌 **🔥 Unpredictable Demand Surge (10% chance)**
+    if random.random() < 0.10:
+        reason = random.choice(["Local Event", "Flash Sale", "Panic Buying", "Social Media Trend"])
+        daily_sales_target = int(daily_sales_target * random.uniform(1.5, 3.0))
+        print(f"🚀 UNEXPECTED DEMAND SURGE on {sale_date.strftime('%Y-%m-%d')} due to {reason}!")
+        
+    date_key = sale_date.strftime('%m-%d')
+    if date_key in holiday_sales_boost:
+        affected_categories = holiday_sales_boost[date_key]["category"]
+        multiplier = holiday_sales_boost[date_key]["multiplier"]
+        
+        # Only boost sales if today's sales include affected categories
+        if any(p[9] in affected_categories for p in products):  
+            daily_sales_target = int(daily_sales_target * multiplier)
+            print(f"🎉 HOLIDAY SALES BOOST for {date_key}: Sales increased by {multiplier}x!")
+            
     return max(200, int(daily_sales_target))  # Ensure sales never drop below 200
 
 def apply_pending_restocks(current_date):
-    """Applies scheduled restocks before processing sales, ensuring no constraint violations."""
+    """Applies scheduled restocks at the end of the day to allow stock depletion first."""
     if current_date in pending_restocks:
         print(f"📦 Applying restocks scheduled for {current_date.strftime('%Y-%m-%d')}...")
 
@@ -195,20 +206,31 @@ def apply_pending_restocks(current_date):
             cursor.execute("SELECT stock, max_stock FROM products WHERE id = %s", (product_id,))
             current_stock, max_stock = cursor.fetchone()
 
-            # 🛠 Ensure new stock does not exceed max_stock
+            # 🛠 **Introduce more restock failures**
+            if random.random() < 0.20:  # 20% chance the restock is delayed
+                delay_days = random.randint(1, 3)
+                new_arrival_date = current_date + timedelta(days=delay_days)
+
+                if new_arrival_date not in pending_restocks:
+                    pending_restocks[new_arrival_date] = []
+                pending_restocks[new_arrival_date].append((product_id, restock_amount))
+
+                print(f"🚛 RESTOCK DELAY: Product ID {product_id} delayed by {delay_days} days (random event)")
+                continue  # Skip this restock for today
+
+            # **🚫 5% chance the restock completely fails**
+            if random.random() < 0.05:
+                print(f"❌ RESTOCK FAILURE: Product ID {product_id} restock failed (supplier issue)")
+                continue  # Skip this product
+
+            # ✅ Apply the restock if it arrives
             new_stock = min(current_stock + restock_amount, max_stock)
-
-            # Prevent check constraint violations
-            if new_stock < 0 or new_stock > max_stock:
-                print(f"⚠️ Skipping restock for Product ID {product_id} (stock limit reached)")
-                continue  # Skip this product if it violates stock constraints
-
-            # Update only if it's a valid restock
             cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (new_stock, product_id))
-            print(f"✅ Restocked {new_stock - current_stock} units for Product ID {product_id}")
 
-        conn.commit()  # Save changes
-        del pending_restocks[current_date]
+            print(f"✅ Successfully restocked {new_stock - current_stock} units for Product ID {product_id}")
+
+        conn.commit()
+        del pending_restocks[current_date]  # Remove from pending list
         
 # **📌 Restocking Function**
 def replenish_stock(current_date):
@@ -233,6 +255,18 @@ def replenish_stock(current_date):
     products_stock = cursor.fetchall()
 
     for product_id, name, stock, min_stock, max_stock, category in products_stock:
+        # **🛑 Check if product has been out of stock multiple days**
+        if stock == 0:
+            recent_stockouts[product_id] = recent_stockouts.get(product_id, 0) + 1
+        else:
+            recent_stockouts[product_id] = 0  # Reset counter if it's back in stock
+
+        # **🚫 If a product sells out 3 days in a row, delay restock by 2-5 days**
+        if recent_stockouts.get(product_id, 0) >= 3:
+            delay_days = random.randint(2, 5)
+            print(f"🛑 STOCKOUT EXTENSION: {name} (ID: {product_id}) remains out of stock for {delay_days} more days!")
+            continue  # Skip restock
+        
         avg_daily_sales = product_sales_data.get(product_id, 0)
 
         # ✅ **Set Restock Timing Based on Demand**
@@ -255,11 +289,18 @@ def replenish_stock(current_date):
             # Directly set stock in the database
             cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (base_restock, product_id))
             conn.commit()
-
+            
         # ✅ **If stock is 0 but high demand, prioritize restock**
         if stock == 0 and avg_daily_sales > 10:
             restock_days = 1  # Urgent next-day restock
-            
+            print(f"🚨 URGENT RESTOCK TRIGGERED: {name} (ID: {product_id}) will be restocked tomorrow.")
+        
+        # 15% chance to delay restocking a product if it’s in high demand
+        if avg_daily_sales > 15 and random.random() < 0.15:
+            delay_days = random.randint(1, 3)
+            print(f"🛑 HIGH DEMAND STOCKOUT: {name} (ID: {product_id}) restock delayed by {delay_days} days!")
+            continue  # Skip restock this time
+
         # ✅ Stagger first-time restocks to avoid mass refills on Day 1
         if avg_daily_sales == 0:
             lead_time = random.randint(7, 14)  # Delay new product restocks by 1-2 weeks
@@ -297,6 +338,9 @@ for day in range(31):
 
     print(f"📅 Processing {sale_date.strftime('%Y-%m-%d')} (Weekday: {weekday})")
 
+    # 📌 Process sales first
+    daily_sales_target = get_daily_sales_target(day, sale_date, weekday)
+
     # **✅ Apply Restocks BEFORE Processing Sales**
     apply_pending_restocks(sale_date)  # 🛠 FIXED: Apply restocks at the start of the day
 
@@ -313,11 +357,24 @@ for day in range(31):
 
     while total_sales < daily_sales_target:
         num_products_in_transaction = random.randint(1, 5)
-        transaction_time = sale_date + timedelta(
-            hours=random.randint(6, 22), minutes=random.randint(0, 59), seconds=random.randint(0, 59)
+        transaction_time = sale_date.replace(hour=0, minute=0, second=0) + timedelta(
+            hours=random.randint(7, 21),  # Ensures range 7-21
+            minutes=random.randint(0, 59),  # Allows full range (0-59)
+            seconds=random.randint(0, 59)
         )
 
-        transaction_products = random.sample(products, min(num_products_in_transaction, len(products)))
+        # Ensure transactions at 7:00-7:29 don't exist
+        if transaction_time.hour == 7 and transaction_time.minute < 30:
+            transaction_time += timedelta(minutes=30 - transaction_time.minute)  # Shift to 7:30
+
+        # Ensure 22:00 transactions exist
+        if transaction_time.hour == 21:
+            if random.random() < 0.5:  # 50% chance some transactions happen at exactly 22:00
+                transaction_time = transaction_time.replace(hour=22, minute=random.randint(0, 59), second=random.randint(0, 59))
+
+        valid_products = [p for p in products if p[3] > 0]  # Filter out out-of-stock products
+        transaction_products = random.sample(valid_products, min(num_products_in_transaction, len(valid_products)))
+
         total_transaction_price = 0
         total_quantity = 0
         sales_records = []
